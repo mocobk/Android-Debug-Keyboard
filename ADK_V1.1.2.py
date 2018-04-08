@@ -8,12 +8,16 @@ import time
 import threading
 import subprocess
 import configparser
+import zipfile
+from axmlparserpy import axmlprinter
+from xml.dom import minidom
 from ctypes import wintypes, windll, byref
 from globalhotkeys import GlobalHotKeys
 from prompt_toolkit import print_formatted_text
 from prompt_toolkit.contrib.completers import WordCompleter
 from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.history import InMemoryHistory
+# from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.shortcuts import prompt
 from prompt_toolkit.shortcuts import set_title
@@ -21,9 +25,9 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.validation import Validator, ValidationError
 import monkeyTest
 
+
 DEVICE_UDID = None
 DEVICE_NAME = ''
-DEVICE_LIST = []
 PACKGE_NAME = ''
 APP_PACKAGE_NAME = ''
 CUR_PATH = os.path.dirname(__file__)
@@ -112,18 +116,55 @@ def adb_input_text(text):
     subprocess.call('adb -s %s shell input text %s' % (DEVICE_UDID, text), shell=True)
 
 
+def get_apk_package_name(apk_path):
+    """获取apk文件的包名信息"""
+    zf = zipfile.ZipFile(apk_path, mode='r')
+    AndroidManifest = zf.open('AndroidManifest.xml')
+    ap = axmlprinter.AXMLPrinter(AndroidManifest.read())
+    # buff = minidom.parseString(ap.getBuff()).toxml()
+    package_name = minidom.parseString(ap.getBuff()).documentElement.getAttribute('package')
+    return package_name
+
+
 def app_install(app_path):
     """安装应用，支持安装网络地址包"""
-    if str(app_path).startswith('http://') or str(app_path).startswith('ftp://'):
-        app_file_name = os.path.basename(app_path)
+    start_time = time.time()
+    if str(app_path).startswith(('http://', '"http://', 'ftp://', '"ftp://', r'\\', r'"\\')):
+        app_file_name = os.path.basename(app_path).replace('"', '')  # 避免"fi le.apk"带空格、引号的路径
         save_path = os.path.join(CUR_PATH, app_file_name)
-        print_color('info', '正在下载网络资源到本地,请稍后...')
+        print_color('info', '正在下载网络资源到本地,请稍后...', end='\n')
+        # 使用windows自带的 powershell 来下载文件
         subprocess.call(
             "powershell (new-object System.Net.WebClient).DownloadFile('{}', '{}')".format(app_path, save_path),
             shell=True)
         print_color('', save_path)
         app_path = save_path
-    subprocess.call('adb -s %s install -r -d %s' % (DEVICE_UDID, app_path), shell=True)
+    apk_package_name = get_apk_package_name(app_path)
+    print_color('info', '正在安装,请稍后...', end='\n')
+    log = subprocess.Popen('adb -s %s install -r -d %s' % (DEVICE_UDID, app_path), shell=True, stdout=subprocess.PIPE)
+    result = [None]
+    while True:
+        new_line = log.stdout.readline().decode('utf-8')
+        # 刷新打印进度百分比
+        if '%' in new_line:
+            sys.stdout.write(' ' * 200 + '\r')
+            sys.stdout.flush()
+            sys.stdout.write(new_line.strip() + '\r')
+            sys.stdout.flush()
+        else:
+            if new_line == '':
+                break
+            print(new_line, end='')
+            result.append(new_line)
+
+    end_time = time.time()
+    duration_time = round(end_time - start_time, 2)
+    if 'Success' in result[-1]:
+        print_color('success', '安装成功', end='\n')
+    else:
+        print_color('error', result[-1], end='\n')
+    print_color('info', '总耗时 %s sec' % duration_time, end='\n')
+    app_start(apk_package_name)
 
 
 def app_force_stop(package_name):
@@ -180,6 +221,8 @@ def adb_connect_tcpip():
         if 'connected to' in result:
             print_color('success', '已成功切换至wifi连接！')
             DEVICE_UDID = str(ip) + ':5555'
+            set_console_title()
+
     except:
         print_color('warning', '切换失败，请检查设备网络是否正确！')
 
@@ -192,6 +235,7 @@ def adb_connect_usb():
     if serial_number in [device['device_udid'] for device in get_device_list()]:
         adb_disconnect_tcpip(DEVICE_UDID)
         DEVICE_UDID = serial_number
+        set_console_title()
         print_color('success', '已成功切换至usb连接！')
     else:
         print_color('warning', '切换失败，请检查设备是否已插入！')
@@ -305,11 +349,10 @@ def get_device_list():
 
 
 def show_devices():
-    global DEVICE_LIST
     printf(FormattedText([('class:warning', '=' * 79)]), style=STYLE)
-    DEVICE_LIST = list(get_device_list())
-    if DEVICE_LIST:
-        for each_device in DEVICE_LIST:
+    device_list = get_device_list()
+    if device_list:
+        for each_device in device_list:
             device = [('', '\n'),
                       ('class:bg_ansidarkgreen', ' [%d] ' % each_device['device_id']),
                       ('', ' '),
@@ -329,7 +372,7 @@ class DeviceIdValidator(Validator):
 
     def validate(self, document):
         try:
-            if int(document.text) not in range(1, len(DEVICE_LIST) + 1):
+            if int(document.text) not in range(1, len(get_device_list()) + 1):
                 raise ValidationError(
                     message='tips: 输入的设备序号不正确，请重新输入！',
                     cursor_position=len(document.text))  # Move cursor to end of input.
@@ -342,18 +385,37 @@ class DeviceIdValidator(Validator):
 def select_device():
     global DEVICE_UDID
     global DEVICE_NAME
-    if len(DEVICE_LIST) > 1:
+    device_list = get_device_list()
+    if len(device_list) > 1:
         select_id = int(prompt('请输入要操作的设备序号：', validator=DeviceIdValidator(), validate_while_typing=False))
-        for each_device in DEVICE_LIST:
+        for each_device in device_list:
             if each_device['device_id'] == select_id:
                 DEVICE_UDID = each_device['device_udid']
                 DEVICE_NAME = each_device['device_name']
                 break
-    elif len(DEVICE_LIST) == 1:
-        DEVICE_UDID = DEVICE_LIST[0]['device_udid']
-        DEVICE_NAME = DEVICE_LIST[0]['device_name']
+    elif len(device_list) == 1:
+        DEVICE_UDID = device_list[0]['device_udid']
+        DEVICE_NAME = device_list[0]['device_name']
     else:
         pass
+
+
+def switch_device():
+    global DEVICE_UDID, DEVICE_NAME
+    cur_device = DEVICE_UDID
+    device_list = get_device_list()
+    device_list_sort_by_id = sorted(device_list, key=lambda x: x['device_id'])
+    cur_device_id = [device['device_id'] for device in device_list_sort_by_id if cur_device == device['device_udid']][0]
+    cur_device_index = cur_device_id - 1
+    if cur_device_id < len(device_list):
+        DEVICE_UDID = device_list_sort_by_id[cur_device_index + 1]['device_udid']
+        device_id = device_list_sort_by_id[cur_device_index + 1]['device_id']
+        DEVICE_NAME = device_list_sort_by_id[cur_device_index + 1]['device_name']
+    else:
+        DEVICE_UDID = device_list_sort_by_id[0]['device_udid']
+        device_id = device_list_sort_by_id[0]['device_id']
+        DEVICE_NAME = device_list_sort_by_id[0]['device_name']
+    return '[%s] %s\t\t%s' % (device_id, DEVICE_NAME, DEVICE_UDID)
 
 
 #############################################################################
@@ -361,9 +423,9 @@ def select_device():
 #############################################################################
 def set_console_title():
     if APP_PACKAGE_NAME:
-        set_title('ADK      %s    UDID:%s   APP:%s' % (DEVICE_NAME, DEVICE_UDID, APP_PACKAGE_NAME))
+        set_title('ADK      %s    SN: %s   APP:%s' % (DEVICE_NAME, DEVICE_UDID, APP_PACKAGE_NAME))
     else:
-        set_title('ADK      %s    UDID:%s' % (DEVICE_NAME, DEVICE_UDID))
+        set_title('ADK      %s    SN: %s' % (DEVICE_NAME, DEVICE_UDID))
 
 
 def set_console_size(buffer_width, buffer_height, window_width, window_height):
@@ -453,8 +515,8 @@ def device_info(end='\n>'):
     system_version = get_system_version()
     ip = get_ip()
     resolution = get_resolution()
-    print_color('info', '设备机型：%s\n系统版本：%s\n分 辨 率：%s\nIP 地 址：%s' % (product_model, system_version, resolution, ip),
-                end=end)
+    print_color('info', '设备机型：%s\n系统版本：%s\n分 辨 率：%s\nIP 地 址：%s\n设备序列：%s' % (
+                    product_model, system_version, resolution, ip, DEVICE_UDID), end=end)
 
 
 def package_info(end='\n>'):
@@ -561,6 +623,12 @@ def _open_dir(event):
     open_cur_dir()
 
 
+@bindings.add('c-a')
+def _app_info(event):
+    print_color('tip', 'app info', end='\n')
+    app_info()
+
+
 @bindings.add('c-p')
 def _package_name(event):
     print_color('tip', 'package name', end='\n')
@@ -574,6 +642,19 @@ def _switch_connect(event):
         adb_connect_usb()
     else:
         adb_connect_tcpip()
+
+
+@bindings.add('s-tab')
+def _switch_device(event):
+    device = switch_device()
+    set_console_title()
+    print_color('tip', '已切换至设备： %s' % device)
+
+
+@bindings.add('escape')
+def _exit_program(event):
+    print_color('tip', '关闭ADK工具...')
+    exit_program()
 
 
 def get_pid(device_udid, package_name):
@@ -716,7 +797,8 @@ auto_completer = WordCompleter([
     'switch connect',
 ], ignore_case=True, sentence=True)
 
-history = InMemoryHistory()
+# history = InMemoryHistory()
+history = FileHistory('./HistoryFile')
 
 
 def start_option():
@@ -783,13 +865,13 @@ def start_option():
             set_global_hot_key(cmd.replace('set hotkey ', ''))
         elif cmd.startswith('adb '):
             adb_cmd(cmd)
-        elif cmd.endswith('.apk'):
+        elif cmd.endswith('.apk') or cmd.endswith('.apk"'):
             app_install(cmd)
         elif cmd.startswith('input '):
             adb_input_text(cmd)
 
         else:
-            print_color('warning', 'Command not found! Please check it again')
+            print_color('warning', 'Command not found! Please check it again', end='\n')
 
 
 #############################################################################
@@ -820,7 +902,7 @@ def show_all_help():
                ('F2', '显示设备信息 -机型 -系统版本 -分辨率 -IP'),
                ('F3', '快速启动指定的APP'),
                ('F4', '重启APP'),
-               ('F5', '刷新'),
+               ('F5', '重启并刷新设备列表'),
                ('F6', '结束APP进程'),
                ('F7', '卸载APP'),
                ('F8', '清除APP数据、缓存'),
@@ -828,6 +910,8 @@ def show_all_help():
                ('F10', '录屏'),
                ('F11', '打开文件保存目录'),
                ('F12', '截图并打开（全局）'),
+               ('Shift+Tab', '按顺序切换已连接的设备'),
+               ('Ctrl+A', '显示当前APP信息'),
                ('Ctrl+W', '切换设备连接方式，USB | WIFI'),
                ('Ctrl+P', '显示APP包名，未指定时默认显示当前APP'),
                ('命令模式：', ''),
@@ -841,14 +925,14 @@ def show_all_help():
                ('app stop', '结束APP进程'),
                ('app uninstall', '卸载APP'),
                ('cls', '清屏'),
-               ('device info', '显示设备信息 -机型 -系统版本 -分辨率 -IP'),
+               ('device info', '显示设备信息 -机型 -系统版本 -分辨率 -IP -设备序列号'),
                ('exit', '退出程序'),
                ('help', '显示所有帮助'),
                ('input', '输入文本内容到设备，暂不支持中文'),
                ('monkey', '运行monkey测试，加参数 -r 重复上一次的monkey测试'),
                ('open dir', '打开文件保存的目录'),
                ('package name', '显示APP包名，未指定时默认显示当前APP'),
-               ('refresh', '刷新'),
+               ('refresh', '重启并刷新设备列表'),
                ('screencap', '截图'),
                ('screenrecord', '录屏'),
                ('set app[ package_name]', '指定调试APP包名，不填包名，默认为当前APP'),
@@ -856,7 +940,7 @@ def show_all_help():
                ('switch connect', '切换设备连接方式，USB | WIFI'),
                ]
     print_color('info', '-' * 79, end='\n')
-    print_color('info', '  Android Debug Keyboard V1.1   @mocobk', end='\n')
+    print_color('info', '  Android Debug Keyboard V1.1.2   @mocobk', end='\n')
     print_color('info', '-' * 79, end='\n')
     for each in strings:
         print_color('info', '  {0:24}{1}'.format(each[0], each[1]), end='\n')
