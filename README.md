@@ -1,9 +1,8 @@
 # Android Debug Keyboard
-ADK是一款安卓 APP 测试辅助工具，可快速截图、录屏、查看设备信息、应用信息、日志及安装、卸载、monkey测试等功能，主要是方便做安卓软件测试的同学，发现Bug、更快地提交Bug。
+Android Debug Keyboard(下面简称ADK)是一款安卓 APP 测试辅助工具，可快速截图、录屏、查看设备信息、应用信息、日志及安装、卸载、monkey测试等功能，主要是方便做安卓软件测试的同学，发现Bug、更快地提交Bug。
 
 ## 工具预览
-gif
-![preview](images/preview.png "preview")
+![image](images/preview.png)
 
 ## 功能简介
 1. 支持多设备连接，查看设备信息、应用信息；
@@ -17,7 +16,7 @@ gif
 1. 更多功能待续...
 
 ## 使用方法
-使用前请确保安装好adb工具，并配置好环境变量，这个不懂的同学自行百度了，扔个设置链接吧，传送门。
+使用前请确保安装好adb工具，并配置好环境变量，这个不懂的同学自行google、百度了，这里也扔个链接吧，[传送门](https://jingyan.baidu.com/article/17bd8e52f514d985ab2bb800.html)。
 
 ### 连接设备
 打开ADK工具，未插入设备前是处理等待设备连接状态，如下：
