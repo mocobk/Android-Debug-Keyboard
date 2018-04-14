@@ -119,6 +119,6 @@ jpg
 
 
 
-目前还有一些异常没考虑到或某些系统版本未兼容，欢迎提交Issues，希望能为安卓测试带来更多便捷！
+目前还有一些异常没考虑到或某些系统版本未兼容，欢迎提交[Issues](https://github.com/mocobk/Android-Debug-Keyboard/issues)，希望能为安卓测试带来更多便捷！
 
 联系作者：mailmzb@qq.com
