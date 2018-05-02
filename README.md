@@ -21,7 +21,7 @@ Android Debug Keyboard(下面简称ADK)是一款安卓 APP 测试辅助工具，
 ### 连接设备
 打开ADK工具，未插入设备前是处理等待设备连接状态
 插入设备后工具会自动连接，当前只有一个设备时会直接进入命令行模式，有多个设备时会显示设备列表并提供选择设备
-![image](images/devices.png)
+![image](images/connect_device.gif)
 
 ### 查看帮助
 进入命令行模式后会显示常用的快捷键，按F1或在命令行中输入help命令显示所有帮助
