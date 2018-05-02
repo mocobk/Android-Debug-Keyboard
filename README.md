@@ -1,6 +1,6 @@
 # Android Debug Keyboard
 Android Debug Keyboard(下面简称ADK)是一款安卓 APP 测试辅助工具，可快速截图、录屏、查看设备信息、应用信息、日志及安装、卸载、monkey测试等功能，主要是方便做安卓软件测试的同学，发现Bug、更快地提交Bug。
-
+[工具下载](https://github.com/mocobk/Android-Debug-Keyboard/releases)
 ## 工具预览
 ![image](images/adk_preview.gif)
 
@@ -109,7 +109,7 @@ ADK默认使用ALT + S全局热键截图,若与其他程序热键冲突可使用
 
 
 ### 小技巧
-1. 输入命令时按上、下键选择，按Tab键确认
+1. 输入命令时按上、下键选择历史命令
 1. ctrl+u/ctrl+k 分别从光标处向前或向后批量删除命令字符串 
 1. ctrl+a/ctrl+e 分别将光标移动到命令最前或最后
 1. 多个设备时可按Shift + Tab来回切换
