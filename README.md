@@ -2,7 +2,7 @@
 Android Debug Keyboard(下面简称ADK)是一款安卓 APP 测试辅助工具，可快速截图、录屏、查看设备信息、应用信息、日志及安装、卸载、monkey测试等功能，主要是方便做安卓软件测试的同学，发现Bug、更快地提交Bug。
 
 ## 工具预览
-![image](images/preview.png)
+![image](images/adk_preview.png)
 
 ## 功能简介
 1. 支持多设备连接，查看设备信息、应用信息；
@@ -19,10 +19,9 @@ Android Debug Keyboard(下面简称ADK)是一款安卓 APP 测试辅助工具，
 使用前请确保安装好adb工具，并配置好环境变量，这个不懂的同学自行google、百度了，这里也扔个链接吧，[传送门](https://jingyan.baidu.com/article/17bd8e52f514d985ab2bb800.html)。
 
 ### 连接设备
-打开ADK工具，未插入设备前是处理等待设备连接状态，如下：
-jpg
+打开ADK工具，未插入设备前是处理等待设备连接状态
 插入设备后工具会自动连接，当前只有一个设备时会直接进入命令行模式，有多个设备时会显示设备列表并提供选择设备
-jpg
+![image](images/devices.png)
 
 ### 查看帮助
 进入命令行模式后会显示常用的快捷键，按F1或在命令行中输入help命令显示所有帮助
@@ -93,14 +92,13 @@ ADK默认使用ALT + S全局热键截图,若与其他程序热键冲突可使用
 
 ### 快速录屏
 按F10可快速对设备屏幕进行录屏，按Ctrl + S结束录屏后，可按F12打开视频文件所有目录
-jpg
-
+![image](images/recorde_screen.png)
 ### 查看应用日志
 按F9可实时查看已设置的应用或当前应用的运行日志，测试时当应用出现崩溃时可输入 `app logcat -l` 高亮显示崩溃日志信息
-jpg
+![image](images/logcat.png)
 
 ### 运行monkey测试
-jpg
+![image](images/monkey.png)
 设置monkey命令并运行monkey测试
 
     >monkey
@@ -109,7 +107,6 @@ jpg
     >monkey -r
 测试结束后可按F12打开报告所在的文件夹
 
-jpg
 
 ### 小技巧
 1. 输入命令时按上、下键选择，按Tab键确认
