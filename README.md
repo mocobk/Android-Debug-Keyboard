@@ -40,15 +40,15 @@ Android Debug Keyboard(下面简称ADK)是一款安卓 APP 测试辅助工具，
       F8                      清除APP数据、缓存
       F9                      查看APP实时日志
       F10                     录屏
-      F11                     打开文件保存目录
-      F12                     截图并打开（全局）
+      F11                     查看当前app信息
+      F12                     打开文件保存目录
       Shift+Tab               按顺序切换已连接的设备
       Ctrl+A                  显示当前APP信息
       Ctrl+W                  切换设备连接方式，USB | WIFI
       Ctrl+P                  显示APP包名，未指定时默认显示当前APP
       命令模式：
       adb                     运行adb命令
-      apk_path.apk            安装apk，支持http、ftp
+      apk_path.apk            安装apk，支持http、ftp、samba
       app clear               清除APP数据、缓存
       app info                显示APP信息 -包名 -版本号 -包路径
       app logcat              查看APP实时日志，加参数 -l 高亮显示
