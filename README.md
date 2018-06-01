@@ -60,6 +60,7 @@ Android Debug Keyboard(下面简称ADK)是一款安卓 APP 测试辅助工具，
       device info             显示设备信息 -机型 -系统版本 -分辨率 -IP -设备序列号
       exit                    退出程序
       help                    显示所有帮助
+      history                 显示历史记录, !+序号可再次调用该命令，如!12
       input                   输入文本内容到设备，暂不支持中文
       monkey                  运行monkey测试，加参数 -r 重复上一次的monkey测试
       open dir                打开文件保存的目录

@@ -25,9 +25,13 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.validation import Validator, ValidationError
 import monkeyTest
 
-
-DEVICE_UDID = None
+DEVICE_UDID = ''
+DEVICE_SERIALNO = ''
 DEVICE_NAME = ''
+DEVICE_RESOLUTION = ''
+DEVICE_MODEL = ''
+SYSTEM_VERSION = ''
+
 PACKGE_NAME = ''
 APP_PACKAGE_NAME = ''
 CUR_PATH = os.path.dirname(__file__)
@@ -68,9 +72,6 @@ def start_adb_server():
 
 def adb_screenshot():
     print_color('success', '正在截图...')
-    # subprocess.Popen('adb -s {0} shell /system/bin/screencap -p /sdcard/screenshot.png & adb -s {1} pull '
-    #                  '/sdcard/screenshot.png %tmp% & rundll32.exe shimgvw.dll,ImageView_Fullscreen '
-    #                  '%tmp%\screenshot.png'.format(DEVICE_UDID, DEVICE_UDID), shell=True)  # 使用系统自带图片查看器打开
     subprocess.Popen('adb -s {0} shell /system/bin/screencap -p /sdcard/screenshot.png & adb -s {1} pull '
                      '/sdcard/screenshot.png %tmp% & start %tmp%\screenshot.png'.format(DEVICE_UDID, DEVICE_UDID),
                      shell=True)  # 使用默认图片打开方式
@@ -142,7 +143,7 @@ def app_install(app_path):
     apk_package_name = get_apk_package_name(app_path)
     print_color('info', '正在安装,请稍后...', end='\n')
     log = subprocess.Popen('adb -s %s install -r -d %s' % (DEVICE_UDID, app_path), shell=True, stdout=subprocess.PIPE)
-    result = [None]
+    result = []
     while True:
         new_line = log.stdout.readline().decode('utf-8')
         # 刷新打印进度百分比
@@ -159,10 +160,11 @@ def app_install(app_path):
 
     end_time = time.time()
     duration_time = round(end_time - start_time, 2)
-    if 'Success' in result[-1]:
-        print_color('success', '安装成功', end='\n')
-    else:
-        print_color('error', result[-1], end='\n')
+    if result:
+        if 'Success' in result[-1]:
+            print_color('success', '安装成功', end='\n')
+        else:
+            print_color('error', result[-1], end='\n')
     print_color('info', '总耗时 %s sec' % duration_time, end='\n')
     app_start(apk_package_name)
 
@@ -194,7 +196,13 @@ def app_uninstall():
 
 def app_clear():
     """清除应用数据及缓存"""
-    subprocess.call('adb -s %s shell pm clear %s' % (DEVICE_UDID, get_app_package_name()), shell=True)
+    try:
+        subprocess.call('adb -s %s shell pm clear %s' % (DEVICE_UDID, get_app_package_name()), shell=True)
+    except Exception as reason:
+        if int(SYSTEM_VERSION.split('.')[0]) > 6:
+            print_color('warning', '清理失败，请尝试打开"开发者选项"->"USB调试（安全设置）"', end='\n')
+        else:
+            print_color('warning', '清理失败,%s' % reason, end='\n')
 
 
 def app_info(end='\n>'):
@@ -279,10 +287,13 @@ def get_serialno():
 
 def get_ip():
     """获取设备ip"""
-    ip = subprocess.check_output('adb -s %s shell ip route' % DEVICE_UDID, shell=True).decode('utf-8')
-    return ip.split()[-1] if ip else 'network anomaly'
-    # return subprocess.check_output('adb -s %s shell getprop dhcp.wlan0.ipaddress' % DEVICE_UDID, shell=True).decode(
-    #     'utf-8').strip()  # android 8.0不支持
+    if int(SYSTEM_VERSION.split('.')[0]) > 6:
+        ip = subprocess.check_output('adb -s %s shell ip route' % DEVICE_UDID, shell=True).decode('utf-8').split()[-1]
+    else:
+        # android 7.0以后不支持下面命令获取ip
+        ip = subprocess.check_output('adb -s %s shell getprop dhcp.wlan0.ipaddress' % DEVICE_UDID, shell=True).decode(
+            'utf-8').strip()
+    return ip if ip else 'network anomaly'
 
 
 def get_resolution():
@@ -398,6 +409,7 @@ def select_device():
         DEVICE_NAME = device_list[0]['device_name']
     else:
         pass
+    set_device_info()
 
 
 def switch_device():
@@ -405,7 +417,13 @@ def switch_device():
     cur_device = DEVICE_UDID
     device_list = get_device_list()
     device_list_sort_by_id = sorted(device_list, key=lambda x: x['device_id'])
-    cur_device_id = [device['device_id'] for device in device_list_sort_by_id if cur_device == device['device_udid']][0]
+    # 在切换设备前，当前连接方式若断开，则将cur_device_id默认为1
+    cur_device_id = 1
+    for device in device_list_sort_by_id:
+        if cur_device == device['device_udid']:
+            cur_device_id = device['device_id']
+            break
+
     cur_device_index = cur_device_id - 1
     if cur_device_id < len(device_list):
         DEVICE_UDID = device_list_sort_by_id[cur_device_index + 1]['device_udid']
@@ -415,7 +433,16 @@ def switch_device():
         DEVICE_UDID = device_list_sort_by_id[0]['device_udid']
         device_id = device_list_sort_by_id[0]['device_id']
         DEVICE_NAME = device_list_sort_by_id[0]['device_name']
+    set_device_info()
     return '[%s] %s\t\t%s' % (device_id, DEVICE_NAME, DEVICE_UDID)
+
+
+def set_device_info():
+    global DEVICE_MODEL, DEVICE_RESOLUTION, DEVICE_SERIALNO, SYSTEM_VERSION
+    DEVICE_MODEL = get_product_model()
+    DEVICE_RESOLUTION = get_resolution()
+    DEVICE_SERIALNO = get_serialno()
+    SYSTEM_VERSION = get_system_version()
 
 
 #############################################################################
@@ -511,12 +538,9 @@ def get_app_package_name():
 
 
 def device_info(end='\n>'):
-    product_model = get_product_model()
-    system_version = get_system_version()
     ip = get_ip()
-    resolution = get_resolution()
     print_color('info', '设备机型：%s\n系统版本：%s\n分 辨 率：%s\nIP 地 址：%s\n设备序列：%s' % (
-                    product_model, system_version, resolution, ip, DEVICE_UDID), end=end)
+        DEVICE_MODEL, SYSTEM_VERSION, DEVICE_RESOLUTION, ip, DEVICE_SERIALNO), end=end)
 
 
 def package_info(end='\n>'):
@@ -606,6 +630,7 @@ def _app_uninstall(event):
 def _app_clear(event):
     print_color('tip', 'execute clear %s' % get_app_package_name(), end='\n')
     app_clear()
+    print('>', end='')
 
 
 @bindings.add('f9')
@@ -623,7 +648,7 @@ def _open_dir(event):
     open_cur_dir()
 
 
-@bindings.add('c-a')
+@bindings.add('f11')
 def _app_info(event):
     print_color('tip', 'app info', end='\n')
     app_info()
@@ -638,17 +663,23 @@ def _package_name(event):
 
 @bindings.add('c-w')
 def _switch_connect(event):
-    if ':5555' in DEVICE_UDID:
-        adb_connect_usb()
-    else:
-        adb_connect_tcpip()
+    try:
+        if ':5555' in DEVICE_UDID:
+            adb_connect_usb()
+        else:
+            adb_connect_tcpip()
+    except:
+        print_color('warning', '切换失败！请检查当前连接是否已断开')
 
 
 @bindings.add('s-tab')
 def _switch_device(event):
-    device = switch_device()
-    set_console_title()
-    print_color('tip', '已切换至设备： %s' % device)
+    try:
+        device = switch_device()
+        set_console_title()
+        print_color('tip', '已切换至设备： %s' % device)
+    except:
+        print_color('warning', '切换失败！请检查所有设备是否已断开')
 
 
 @bindings.add('escape')
@@ -757,7 +788,8 @@ def set_parameter(pck_name):
                                                                                        throttle_time=throttle_time,
                                                                                        count=count)
     print_color('warning',
-                '\n您设置的命令参数如下(执行大约%s秒)：\n\n%s\n' % (str((float(throttle_time) / 1000) * int(count) / 3), monkey_cmd),
+                '\n您设置的命令参数如下(大约执行%s秒)：\n\n%s\n' % (
+                    str(round((float(throttle_time) / 1000) * int(count) / 3, 1)), monkey_cmd),
                 end='\n')
 
     cf2 = configparser.ConfigParser()
@@ -784,6 +816,7 @@ auto_completer = WordCompleter([
     'device info',
     'exit',
     'help',
+    'history',
     'input',
     'monkey',
     'monkey -r',
@@ -801,6 +834,20 @@ auto_completer = WordCompleter([
 history = FileHistory('./HistoryFile')
 
 
+def show_history():
+    # 对历史记录去重，且保持原来的顺序(因命令少，未采用与linux完全一致的显示方式)
+    origin_history = list(history.strings)
+    new_history = sorted(list(set(origin_history)), key=origin_history[::-1].index, reverse=True)
+    history.strings.clear()
+    # 设置显示历史记录最多条数
+    history_count = 100
+    for each in new_history[len(new_history) - history_count:]:
+        # 这里需使用history自带的方法加入，否则持久化后的格式不对
+        history.append(each)
+    for index, each in enumerate(history.strings, start=1):
+        print_color('info', '{0:>4}  {1}'.format(index, each), end='\n')
+
+
 def start_option():
     """
     主循环
@@ -808,11 +855,21 @@ def start_option():
     """
 
     while True:
+        cmd = ''
         try:
-            cmd = prompt('>', extra_key_bindings=bindings, completer=auto_completer, complete_while_typing=True,
+            cmd = prompt('>', key_bindings=bindings, completer=auto_completer, complete_while_typing=True,
                          history=history, prompt_continuation=True)
         except (KeyboardInterrupt, EOFError):
             start_option()
+        if cmd.startswith('!'):
+            try:
+                cmd = history.strings[int(cmd.replace('!', '')) - 1]
+                print_color('tip', cmd, end='\n')
+                history.strings.pop()
+                history.append(cmd)
+            except:
+                pass
+
         if cmd == '':
             pass
         elif cmd == 'app clear':
@@ -841,6 +898,8 @@ def start_option():
             exit_program()
         elif cmd == 'help':
             show_all_help()
+        elif cmd == 'history':
+            show_history()
         elif cmd == 'monkey':
             run_monkey(set_param=True)
         elif cmd == 'monkey -r':
@@ -866,7 +925,15 @@ def start_option():
         elif cmd.startswith('adb '):
             adb_cmd(cmd)
         elif cmd.endswith('.apk') or cmd.endswith('.apk"'):
-            app_install(cmd)
+            try:
+                app_install(cmd)
+            except AssertionError:
+                # 失败后字体颜色会被设置红色，下面将其恢复
+                ctypes.windll.kernel32.SetConsoleTextAttribute(ctypes.windll.kernel32.GetStdHandle(-11),
+                                                               0x04 | 0x02 | 0x01)
+                print_color('warning', '安装失败！请重试，并在手机端确认', end='\n')
+            except Exception as reason:
+                print_color('warning', reason, end='\n')
         elif cmd.startswith('input '):
             adb_input_text(cmd)
 
@@ -908,8 +975,8 @@ def show_all_help():
                ('F8', '清除APP数据、缓存'),
                ('F9', '查看APP实时日志'),
                ('F10', '录屏'),
-               ('F11', '打开文件保存目录'),
-               ('F12', '截图并打开（全局）'),
+               ('F11', '查看当前app信息'),
+               ('F12', '打开文件保存目录'),
                ('Shift+Tab', '按顺序切换已连接的设备'),
                ('Ctrl+A', '显示当前APP信息'),
                ('Ctrl+W', '切换设备连接方式，USB | WIFI'),
@@ -928,6 +995,7 @@ def show_all_help():
                ('device info', '显示设备信息 -机型 -系统版本 -分辨率 -IP -设备序列号'),
                ('exit', '退出程序'),
                ('help', '显示所有帮助'),
+               ('history', '显示历史记录, !+"序号"可再次调用该命令，如!12'),
                ('input', '输入文本内容到设备，暂不支持中文'),
                ('monkey', '运行monkey测试，加参数 -r 重复上一次的monkey测试'),
                ('open dir', '打开文件保存的目录'),
@@ -940,7 +1008,7 @@ def show_all_help():
                ('switch connect', '切换设备连接方式，USB | WIFI'),
                ]
     print_color('info', '-' * 79, end='\n')
-    print_color('info', '  Android Debug Keyboard V1.1.2   @mocobk', end='\n')
+    print_color('info', '  Android Debug Keyboard V1.2.0   @mocobk', end='\n')
     print_color('info', '-' * 79, end='\n')
     for each in strings:
         print_color('info', '  {0:24}{1}'.format(each[0], each[1]), end='\n')
