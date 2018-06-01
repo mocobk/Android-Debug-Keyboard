@@ -1,0 +1,1 @@
+pyinstaller -F -i adk.ico --distpath ..\dist --workpath ..\build  ADK.py
